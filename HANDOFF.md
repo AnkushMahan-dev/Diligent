@@ -100,13 +100,30 @@ confirm the current engine is the better fit. The engine is isolated in
 `LCL_SOURCE_SCAN` inside `LZFG_ABAP_SOURCE_SCANTOP`, so swapping it is a
 contained change.
 
-**b) The function group's abapGit files are hand-built and unverified.**
+**b) The abapGit XML was hand-built; it has now been checked, not round-tripped.**
 
-`zfg_abap_source_scan.fugr.xml` and its include/function files were written
-against abapGit's FUGR serializer format (element names checked against
-`zcl_abapgit_object_fugr.clas.abap`), but were never round-tripped through a
-real system. The table, structures and report follow well-trodden formats and
-should import cleanly.
+The first import attempt short-dumped with `XML_FORMAT_ERROR` /
+`CX_XSLT_FORMAT_ERROR` in `FROM_XML`. Cause: abapGit reads these files with
+`CALL TRANSFORMATION id`, and asXML requires every element to appear **in the
+component order of the underlying ABAP structure**. Two files had elements out
+of order, which asXML reports as "start tags appear where no more are
+expected":
+
+* `zfg_abap_source_scan.fugr.xml` - all eight `RSIMP` blocks had `TYP` before
+  `OPTIONAL`. Correct order is `PARAMETER, DEFAULT, OPTIONAL, TYP`.
+* `zabap_source_scan.prog.xml` - `PROGDIR` had `VARCL` after `SUBC`. In
+  `PROGDIR`, `VARCL` is component 5 and `SUBC` is component 11.
+
+Both are fixed. Every XML file was then re-checked mechanically against the
+real component orders, taken from abapGit's own repository: `deps/dd03p`,
+`deps/progdir`, `deps/dd02v` and `deps/dd09l` for the DDIC objects, and the
+serialized function group `src/objects/core/zabapgit_parallel.fugr.xml` for
+the FUGR layout (which also confirms the row element names - `<SOBJ_NAME>`
+under `INCLUDES`, `<item>` under `FUNCTIONS`, `<RSIMP>`/`<RSEXP>`/`<RSTBL>`
+under the parameter tables). All seven files now pass.
+
+That is a static check against known-good reference files, not an import into
+a real system - the fallback below still stands if the FUGR step fails.
 
 *If the FUGR step of the pull fails:* create it by hand — SE80, new function
 group `ZFG_ABAP_SOURCE_SCAN`, paste
