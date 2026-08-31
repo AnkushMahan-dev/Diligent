@@ -100,14 +100,29 @@ confirm the current engine is the better fit. The engine is isolated in
 `LCL_SOURCE_SCAN` inside `LZFG_ABAP_SOURCE_SCANTOP`, so swapping it is a
 contained change.
 
-**b) The abapGit XML was hand-built; it has now been checked, not round-tripped.**
+**b) The abapGit XML was hand-built; three format bugs are now fixed.**
 
-The first import attempt short-dumped with `XML_FORMAT_ERROR` /
-`CX_XSLT_FORMAT_ERROR` in `FROM_XML`. Cause: abapGit reads these files with
-`CALL TRANSFORMATION id`, and asXML requires every element to appear **in the
-component order of the underlying ABAP structure**. Two files had elements out
-of order, which asXML reports as "start tags appear where no more are
-expected":
+**The dump was `.abapgit.xml`.** It had an `<abapGit version="v1.0.0" ...>`
+wrapper element around `<asx:abap>`. Object files under `/src/` do use that
+wrapper, but `.abapgit.xml` must **not**: `zcl_abapgit_dot_abapgit=>from_xml`
+runs `CALL TRANSFORMATION id` straight on the raw file, so its root element
+has to be `<asx:abap>` itself. With the wrapper, asXML reports "the root tag
+<abap> must be in the XML namespace http://www.sap.com/abapxml" - reason 1 of
+the dump.
+
+That method has no `TRY`/`CATCH`, which is why it short-dumped instead of
+showing an abapGit error. Object XML is read through
+`zif_abapgit_xml_input~read`, which *does* catch `cx_transformation_error` and
+raises a readable "File <name>: ..." message - so a short dump in `FROM_XML`
+can only come from `.abapgit.xml`. Reference: abapGit's own `.abapgit.xml`.
+
+Two further ordering bugs were found and fixed in the same pass (they would
+have surfaced as abapGit error messages after the dump was cleared):
+
+abapGit reads object files with `CALL TRANSFORMATION id`, and asXML requires
+every element to appear **in the component order of the underlying ABAP
+structure**; out-of-order elements are reported as "start tags appear where no
+more are expected":
 
 * `zfg_abap_source_scan.fugr.xml` - all eight `RSIMP` blocks had `TYP` before
   `OPTIONAL`. Correct order is `PARAMETER, DEFAULT, OPTIONAL, TYP`.
